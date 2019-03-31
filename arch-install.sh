@@ -20,7 +20,7 @@ LC_COLLATE="C"
 FONT_MAP="8859-1_to_uni"
 PASSWORD=""
 FS="ext4"
-PARTITION_TYPE="msdos"
+DEFAULT_PARTITION_TYPE="msdos"
 PARTITION_LAYOUT=""
 INSTALL_TYPE="desktop"
 TARGET_PREFIX="/mnt"
@@ -54,8 +54,8 @@ function usage() {
         echo "  ${0} -w P@ssw0rd -k ${DEFAULT_KEYMAP} -l ${LANG} -n ${FQDN} -t ${TIMEZONE}"
     fi
     echo
-    echo "Required parameters"
     if [ "${MODE}" == "install" ]; then
+        echo "Required parameters in install mode"
         echo "  -d : The target device. For example, 'sda'."
         echo "  -p : The partition layout to use. One of: "
         echo "         'brh' : /boot, /root and /home"
@@ -690,27 +690,69 @@ function cleanup() {
     echo "All done!"
 }
 
-OPTSTRING=b:c:d:e:f:hk:l:n:p:r:t:w:
-while getopts ${OPTSTRING} OPT
-do
-    case ${OPT} in
-        b) PARTITION_TYPE=${OPTARG};;
-        c) NFS_CACHE=${OPTARG};;
-        d) DSK=${OPTARG};;
-        e) DE=${OPTARG};;
-        f) FS=${OPTARG};;
-        h) usage;;
-        k) KEYMAP=${OPTARG};;
-        l) LANG=${OPTARG};;
-        n) FQDN=${OPTARG};;
-        p) PARTITION_LAYOUT=${OPTARG};;
-        r) INSTALL_TYPE=${OPTARG};;
-        t) TIMEZONE=${OPTARG};;
-        w) PASSWORD=${OPTARG};;
-        *) usage;;
+#
+# Main
+#
+SHORTOPTS="b:c:d:e:f:k:l:n:p:r:t:w:h"
+LONGOPTS="parttype:,nfscache:,disk:,desktopenv:,fstype:,keymap:,lang:,hostname:,partlayout:,role:,timezone:,password:,help"
+OPTS="$(getopt --options ${SHORTOPTS} --longoptions ${LONGOPTS} --name $(basename $0) -- $@)"
+eval set -- "${OPTS}"
+
+while true; do
+    case "$1" in
+        -b|--parttype)
+            case "$2" in
+                 *) PARTITION_TYPE=$2; shift 2;;
+            esac;;
+        -c|--nfscache)
+            case "$2" in
+                 *) NFS_CACHE=$2; shift 2;;
+            esac;;
+        -d|--disk)
+            case "$2" in
+                *) DSK=$2; shift 2;;
+            esac;;
+        -e|--desktopenv)
+            case "$2" in
+                 *) DE=$2; shift 2;;
+            esac;;
+        -f|--fstype)
+            case "$2" in
+                 *) FS=$2; shift 2;;
+            esac;;
+        -k|--keymap)
+            case "$2" in
+                 *) KEYMAP=$2; shift 2;;
+            esac;;
+        -l|--lang)
+            case "$2" in
+                 *) LANG=$2; shift 2;;
+            esac;;
+        -n|--hostname)
+            case "$2" in
+                 *) FQDN=$2; shift 2;;
+            esac;;
+        -p|--partlayout)
+            case "$2" in
+                 *) PARTITION_LAYOUT=$2; shift 2;;
+            esac;;
+        -r|--role)
+            case "$2" in
+                 *) INSTALL_TYPE=$2; shift 2;;
+            esac;;
+        -t|--timezone)
+            case "$2" in
+                 *) TIMEZONE=$2; shift 2;;
+            esac;;
+        -w|--password)
+            case "$2" in
+                 *) PASSWORD=$2; shift 2;;
+            esac;;
+        -h|--help) usage; shift;;
+        --) shift; break;;
+        *) echo "ERROR: internal, while parsing command line."; exit 1;;
     esac
 done
-shift "$(( $OPTIND - 1 ))"
 
 if [ $(id -u) -ne 0 ]; then
 	echo "ERROR! $(basename ${0}) must be run as root."
