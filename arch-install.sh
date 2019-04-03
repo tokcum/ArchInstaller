@@ -214,6 +214,7 @@ function summary() {
 		fi
 		echo " - Disk label          : ${PARTITION_TYPE}"
 		echo " - Partition layout    : ${PARTITION_LAYOUT}"
+		echo " - LVM                 : ${LVM}"
 		echo " - File System         : ${FS}"
 	fi
 	echo " - CPU                 : ${CPU}"
