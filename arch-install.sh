@@ -15,6 +15,7 @@ FQDN="arch.example.org"
 TIMEZONE="Europe/London"
 DEFAULT_KEYMAP="uk"
 LANG="en_GB.UTF-8"
+LVM="false"
 LOCALE=`echo ${LANG} | cut -d'.' -f1`
 LC_COLLATE="C"
 FONT_MAP="8859-1_to_uni"
@@ -75,6 +76,7 @@ function usage() {
     echo "  -e : The desktop environment to install. Defaults to '${DE}'. Can be 'none', 'cinnamon', 'gnome', 'kde', 'lxde', 'mate' or 'xfce'"
     echo "  -k : The keyboard mapping to use. Defaults to '${DEFAULT_KEYMAP}'. See '/usr/share/kbd/keymaps/' for options."
     echo "  -l : The language to use. Defaults to '${LANG}'. See '/etc/locale.gen' for options."
+    echo "  -m : Use LVM. Defaults to '${LVM}'"
     echo "  -n : The hostname to use. Defaults to '${FQDN}'"
     echo "  -r : The computer role. Defaults to '${INSTALL_TYPE}'. Can be 'desktop' or 'server'."
     echo "  -t : The timezone to use. Defaults to '${TIMEZONE}'. See '/usr/share/zoneinfo/' for options."
@@ -309,6 +311,72 @@ function format_disks() {
     fi
 }
 
+function format_lvm() {
+    echo "==> Clearing partition table on /dev/${DSK}"
+    sgdisk --zap /dev/${DSK} >/dev/null 2>&1
+    echo "==> Destroying magic strings and signatures on /dev/${DSK}"
+    dd if=/dev/zero of=/dev/${DSK} bs=512 count=2048 >/dev/null 2>&1
+    wipefs -a /dev/${DSK} 2>/dev/null
+    echo "==> Initialising disk /dev/${DSK}: ${PARTITION_TYPE}"
+    parted -s /dev/${DSK} mktable ${PARTITION_TYPE} >/dev/null
+    boot_end=$(( 1 + 122 ))
+    max=$(( $(cat /sys/block/${DSK}/size) * 512 / 1024 / 1024 - 1 ))
+
+    if [ "${PARTITION_LAYOUT}" == "brh" ]; then
+        # If the total space available is less than 'root_max' (in Gb) then make
+        # the /root partition half the total disk capcity.
+        root_max=24
+        if [ $max -le $(( ${root_max} * 1024 )) ]; then
+            root_end=$(( $max / 2 ))
+        else
+            root_end=$(( $root_max * 1024 ))
+        fi
+    else
+        root_end=$max
+    fi
+
+    echo "==> Creating /boot partition"
+    parted -a optimal -s /dev/${DSK} unit MiB mkpart primary 1 $boot_end >/dev/null
+    ROOT_PARTITION="${DSK}2"
+    echo "==> Creating PV partition"
+    parted -a optimal -s /dev/${DSK} unit MiB mkpart primary $boot_end $max >/dev/null
+    parted -s /dev/${DSK} set 2 lvm on
+
+    echo "==> Creating PV"
+    pvcreate /dev/${DSK}2
+    echo "==> Creating VG"
+    vgcreate vg_system /dev/${DSK}2
+
+    echo "==> Creating LV lv_root"
+    lvcreate -L ${root_end}M -n lv_root vg_system
+  
+    if [ "${PARTITION_LAYOUT}" == "brh" ]; then
+        echo "==> Creating LV lv_home"
+        lvcreate -L $(( $max - $root_end ))M -n lv_home vg_system
+    fi
+    
+    echo "==> Setting /dev/${DSK} bootable"
+    parted -a optimal -s /dev/${DSK} toggle 1 boot >/dev/null
+    if [ "${PARTITION_TYPE}" == "gpt" ]; then
+        sgdisk /dev/${DSK} --attributes=1:set:2 >/dev/null
+    fi
+
+    partprobe /dev/${DSK}
+    if [[ $? -gt 0 ]]; then
+        echo "ERROR! Partitioning /dev/${DSK} failed."
+        exit 1
+    fi
+    udevadm settle
+    echo "==> Making /boot filesystem : ext2"
+    mkfs.ext2 -F -L boot -m 0 -q /dev/${DSK}1 >/dev/null
+    echo "==> Making /root filesystem : ${FS}"
+    ${MKFS} ${MKFS_L} root /dev/vg_system/lv_root >/dev/null
+    if [ "${PARTITION_LAYOUT}" == "brh" ]; then
+        echo "==> Making /home filesystem : ${FS}"
+        ${MKFS} ${MKFS_L} home /dev/vg_system/lv_home >/dev/null
+    fi
+}
+
 function mount_disks() {
     echo "==> Mounting filesystems"
     mount -t ${FS} ${MOUNT_OPTS} /dev/${ROOT_PARTITION} ${TARGET_PREFIX} >/dev/null
@@ -316,6 +384,16 @@ function mount_disks() {
     mount -t ext2 /dev/${DSK}1 ${TARGET_PREFIX}/boot >/dev/null
     if [ "${PARTITION_LAYOUT}" == "brh" ]; then
         mount -t ${FS} ${MOUNT_OPTS} /dev/${DSK}3 ${TARGET_PREFIX}/home >/dev/null
+    fi
+}
+
+function mount_lvm() {
+    echo "==> Mounting filesystems"
+    mount -t ${FS} ${MOUNT_OPTS} /dev/vg_system/lv_root ${TARGET_PREFIX} >/dev/null
+    mkdir -p ${TARGET_PREFIX}/{boot,home}
+    mount -t ext2 /dev/${DSK}1 ${TARGET_PREFIX}/boot >/dev/null
+    if [ "${PARTITION_LAYOUT}" == "brh" ]; then
+        mount -t ${FS} ${MOUNT_OPTS} /dev/vg_system/lv_home ${TARGET_PREFIX}/home >/dev/null
     fi
 }
 
@@ -690,7 +768,7 @@ function cleanup() {
     echo "All done!"
 }
 
-OPTSTRING=b:c:d:e:f:hk:l:n:p:r:t:w:
+OPTSTRING=b:c:d:e:f:hk:l:mn:p:r:t:w:
 while getopts ${OPTSTRING} OPT
 do
     case ${OPT} in
@@ -702,6 +780,7 @@ do
         h) usage;;
         k) KEYMAP=${OPTARG};;
         l) LANG=${OPTARG};;
+        m) LVM=true;;
         n) FQDN=${OPTARG};;
         p) PARTITION_LAYOUT=${OPTARG};;
         r) INSTALL_TYPE=${OPTARG};;
@@ -779,8 +858,14 @@ summary
 final_warning
 
 if [ "${MODE}" == "install" ]; then
-    format_disks
-    mount_disks
+    if [ "${LVM}" == "false" ]; then
+        format_disks
+        mount_disks
+    else
+        format_lvm
+        mount_lvm
+    fi
+
     if [ -z "${NFS_CACHE}" ]; then
         bind_pacman_cache
     fi
