@@ -353,7 +353,7 @@ function format_lvm() {
   
     if [ "${PARTITION_LAYOUT}" == "brh" ]; then
         echo "==> Creating LV lv_home"
-        lvcreate -L $(( $max - $root_end ))M -n lv_home vg_system
+        lvcreate -L $(( $max - $root_end - 1024 ))M -n lv_home vg_system
     fi
     
     echo "==> Setting /dev/${DSK} bootable"
