@@ -365,20 +365,28 @@ update_early_hooks() {
     local NEW_HOOK=${1}
     local OLD_ARRAY=`egrep ^HOOKS= ${TARGET_PREFIX}/etc/mkinitcpio.conf`
 
+    echo "xxxxx tm xxxxx DEBUG"
+    echo "xxxxx tm xxxxx $OLD_ARRAY"
+    sleep 10
+    echo "xxxxx NEW_HOOK: $NEW_HOOK"
     if [ -n "${NEW_HOOK}" ]; then
         # Determine if the new module is already listed.
         _EXISTS=`echo ${OLD_ARRAY} | grep ${NEW_HOOK}`
         if [ $? -eq 1 ]; then
 
-            source ${TARGET_PREFIX}/etc/mkinitcpio.conf
+            #source ${TARGET_PREFIX}/etc/mkinitcpio.conf
+            local HOOKS="$(cat /mnt/etc/mkinitcpio.conf | grep -E "^HOOKS=" | grep -wo '[[:lower:][:space:]]*')"
+            echo "xxxxx HOOKS: $HOOKS"
             if [ -z "${HOOKS}" ]; then
                 NEW_HOOKS="${NEW_HOOK}"
             else
                 NEW_HOOKS="${HOOKS} ${NEW_HOOK}"
             fi
-            replaceinfile "HOOKS=\"${HOOKS}\"" "HOOKS=\"${NEW_HOOKS}\"" ${TARGET_PREFIX}/etc/mkinitcpio.conf
+            replaceinfile "HOOKS=(${HOOKS})" "HOOKS=(${NEW_HOOKS})" ${TARGET_PREFIX}/etc/mkinitcpio.conf
         fi
     fi
+    echo "xxxxx NEW_HOOKS: $NEW_HOOKS"
+    cat ${TARGET_PREFIX}/etc/mkinitcpio.conf | grep -i hook
 }
 
 system_ctl() {
