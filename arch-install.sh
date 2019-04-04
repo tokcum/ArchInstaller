@@ -524,6 +524,10 @@ function build_configuration() {
     if [ "${MODE}" == "install" ]; then
         update_early_hooks consolefont
         update_early_hooks keymap
+        if [ "${LVM}" == "true" ]; then
+            update_early_hooks lvm2
+        fi
+
         # Determine the current (not running) Kernel version
         KERNEL_VER=`pacman -Si linux | grep Version | cut -d':' -f2 | sed 's/ //g'`
         add_config "depmod -a ${KERNEL_VER}-ARCH"
