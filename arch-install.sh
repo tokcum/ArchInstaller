@@ -696,8 +696,27 @@ function cleanup() {
 SHORTOPTS="b:c:d:e:f:k:l:n:p:r:t:w:h"
 LONGOPTS="parttype:,nfscache:,disk:,desktopenv:,fstype:,keymap:,lang:,hostname:,partlayout:,role:,timezone:,password:,help"
 OPTS="$(getopt --options ${SHORTOPTS} --longoptions ${LONGOPTS} --name $(basename $0) -- $@)"
+if [ $? -ne 0 ]; then
+    echo "ERROR: Failed to parse options...exiting." >&2
+    #call usage #Fixme
+    exit 1
+fi
 eval set -- "${OPTS}"
 
+# set initial values
+#VERBOSE=false
+#Ideas: dry-run which installs into a fake block device
+#       do not ask
+#       final reboot auto
+#Although it doesn't seem to mention many things I have commonly seen over the years used to denote various meanings:
+#
+#     square brackets [optional option]
+#     angle brackets <required argument>
+#     curly braces {default values}
+#     parenthesis (miscellaneous info)
+#
+# Stop bash from scrolling down, when scrolled up.
+#
 while true; do
     case "$1" in
         -b|--parttype)
