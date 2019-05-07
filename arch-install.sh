@@ -313,6 +313,15 @@ function format_disks() {
 }
 
 function format_lvm() {
+    echo "==> Disable / Delete old LVM configuration"
+    VGS="$(vgs | tail -n +2 | awk '{print $1}')"
+    if [ -n "$VGS" ]; then
+        for VG in $VGS; do
+            vgchange --yes --activate n $VG
+            vgremove --yes $VG
+        done
+    fi
+    
     echo "==> Clearing partition table on /dev/${DSK}"
     sgdisk --zap /dev/${DSK} >/dev/null 2>&1
     echo "==> Destroying magic strings and signatures on /dev/${DSK}"
@@ -344,16 +353,16 @@ function format_lvm() {
     parted -s /dev/${DSK} set 2 lvm on
 
     echo "==> Creating PV"
-    pvcreate /dev/${DSK}2
+    pvcreate -ff /dev/${DSK}2
     echo "==> Creating VG"
     vgcreate vg_system /dev/${DSK}2
 
     echo "==> Creating LV lv_root"
-    lvcreate -L ${root_end}M -n lv_root vg_system
+    lvcreate --yes -L ${root_end}M -n lv_root vg_system
   
     if [ "${PARTITION_LAYOUT}" == "brh" ]; then
         echo "==> Creating LV lv_home"
-        lvcreate -L $(( $max - $root_end - 1024 ))M -n lv_home vg_system
+        lvcreate --yes -L $(( $max - $root_end - 1024 ))M -n lv_home vg_system
     fi
     
     echo "==> Setting /dev/${DSK} bootable"
