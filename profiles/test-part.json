@@ -1,0 +1,26 @@
+{ "partitioning" : {
+  "disk": [
+    { "device": "/dev/sda", "label": "dos", "type": "", 
+        "partitions": [
+          { "nr": 1, "type": "linux", "size": "1G" },
+          { "nr": 2, "type": "swap", "size": "4G" },
+          { "nr": 3, "type": "linux-lvm", "size": "100G" }
+        ]
+    }
+  ],
+  "lvm": [
+    { "vg": "vg_system", "pesize": "32M", 
+        "lvs": [
+          { "name": "lv_root", "size": "16G" },
+          { "name": "lv_home", "size": "64G" }
+        ]
+    }
+  ],
+  "fs": [ 
+    { "device": "/dev/sda1", "label": "boot", "type": "ext2", "mount": "/boot" },
+    { "device": "/dev/sda2", "label": "swap", "type": "swap", "mount": "swap" },
+    { "device": "/dev/vg_system/lv_root", "label": "root", "type": "xfs", "mount": "/" },
+    { "device": "/dev/vg_system/lv_home", "label": "home", "type": "xfs", "mount": "/home" }
+  ]
+}
+}
